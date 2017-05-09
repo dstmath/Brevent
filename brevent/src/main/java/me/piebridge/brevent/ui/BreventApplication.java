@@ -1,7 +1,6 @@
 package me.piebridge.brevent.ui;
 
 import android.app.Application;
-import android.content.res.Resources;
 import android.os.Build;
 import android.os.Environment;
 import android.system.ErrnoException;
@@ -31,7 +30,7 @@ public class BreventApplication extends Application {
 
     private boolean mSupportStopped = true;
 
-    private boolean mSupportStandby = maySupportStandby();
+    private boolean mSupportStandby = false;
 
     private boolean copied;
 
@@ -136,23 +135,8 @@ public class BreventApplication extends Application {
         return path;
     }
 
-    private boolean maySupportStandby() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return false;
-        }
-        Resources system = Resources.getSystem();
-        int identifier = system.getIdentifier("config_enableAutoPowerModes", "bool", "android");
-        try {
-            return identifier != 0 && system.getBoolean(identifier);
-        } catch (Resources.NotFoundException e) { // NOSONAR
-            return false;
-        }
-    }
-
     private void setSupportStandby(boolean supportStandby) {
-        if (!mSupportStandby && supportStandby) {
-            mSupportStandby = true;
-        }
+        mSupportStandby = supportStandby;
     }
 
     public boolean supportStandby() {
