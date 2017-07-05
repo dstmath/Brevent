@@ -17,6 +17,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.HandlerThread;
 import android.os.Process;
@@ -384,8 +385,19 @@ public abstract class DonateActivity extends Activity implements View.OnClickLis
     }
 
     protected boolean isPlay() {
-        return hasPlay() &&
-                PACKAGE_PLAY.equals(getPackageManager().getInstallerPackageName(getPackageName()));
+        PackageManager pm = getPackageManager();
+        String packageName = getPackageName();
+        return isPlayDerived(pm, packageName);
+    }
+
+    public static boolean isPlayDerived(PackageManager pm, String packageName) {
+        try {
+            Bundle bundle = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA).metaData;
+            return bundle != null && bundle.containsKey("com.android.vending.derived.apk.id");
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.d(TAG, "Can't get application for " + packageName, e);
+            return false;
+        }
     }
 
     private Uri getQrCodeUri() {

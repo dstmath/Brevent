@@ -20,7 +20,6 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageParser;
 import android.content.pm.ResolveInfo;
 import android.content.pm.Signature;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -37,15 +36,12 @@ import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.Snackbar;
 import android.support.design.widget.TabLayout;
-import android.support.v4.content.ContextCompat;
 import android.support.v4.util.ArraySet;
 import android.support.v4.util.SimpleArrayMap;
 import android.support.v4.view.ViewPager;
 import android.telecom.TelecomManager;
-import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseIntArray;
-import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -55,7 +51,6 @@ import android.widget.Toolbar;
 import java.lang.reflect.InvocationTargetException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -79,9 +74,6 @@ import me.piebridge.brevent.protocol.BreventStatus;
 
 public class BreventActivity extends Activity
         implements ViewPager.OnPageChangeListener, AppBarLayout.OnOffsetChangedListener {
-
-    private static final String CUSTOM_TILE_PREFIX = "custom(";
-    private static final int CUSTOM_TILE_LENGTH = 7;
 
     public static final int MESSAGE_RETRIEVE = 0;
     public static final int MESSAGE_RETRIEVE2 = 1;
@@ -112,11 +104,10 @@ public class BreventActivity extends Activity
     public static final int IMPORTANT_DIALER = 6;
     public static final int IMPORTANT_ASSISTANT = 7;
     public static final int IMPORTANT_WEBVIEW = 8;
-    public static final int IMPORTANT_TILE = 9;
-    public static final int IMPORTANT_ACCESSIBILITY = 10;
-    public static final int IMPORTANT_DEVICE_ADMIN = 11;
-    public static final int IMPORTANT_BATTERY = 13;
-    public static final int IMPORTANT_TRUST_AGENT = 14;
+    public static final int IMPORTANT_ACCESSIBILITY = 9;
+    public static final int IMPORTANT_DEVICE_ADMIN = 10;
+    public static final int IMPORTANT_BATTERY = 11;
+    public static final int IMPORTANT_TRUST_AGENT = 12;
 
     private static final int ROOT_TIMEOUT = 10000;
 
@@ -224,6 +215,7 @@ public class BreventActivity extends Activity
             mCoordinator = (CoordinatorLayout) findViewById(R.id.coordinator);
 
             mToolbar = (Toolbar) findViewById(R.id.toolbar);
+            ColorUtils.fixToolbar(this, mToolbar);
             setActionBar(mToolbar);
 
             mPager = (ViewPager) findViewById(R.id.pager);
@@ -240,9 +232,10 @@ public class BreventActivity extends Activity
 
             mTitles = getResources().getStringArray(R.array.fragment_apps);
 
-            mColorControlNormal = resolveColor(android.R.attr.colorControlNormal);
-            mTextColorPrimary = resolveColor(android.R.attr.textColorPrimary);
-            mColorControlHighlight = resolveColor(android.R.attr.colorControlHighlight);
+            mColorControlNormal = ColorUtils.resolveColor(this, android.R.attr.colorControlNormal);
+            mTextColorPrimary = ColorUtils.resolveColor(this, android.R.attr.textColorPrimary);
+            mColorControlHighlight =
+                    ColorUtils.resolveColor(this, android.R.attr.colorControlHighlight);
         }
     }
 
@@ -286,9 +279,6 @@ public class BreventActivity extends Activity
     }
 
     public void showDisabled(int title) {
-        if (stopped) {
-            return;
-        }
         AppsDisabledFragment disabledFragment =
                 (AppsDisabledFragment) getFragmentManager().findFragmentByTag(FRAGMENT_DISABLED);
         if (disabledFragment != null) {
@@ -304,9 +294,6 @@ public class BreventActivity extends Activity
     }
 
     public void showProgress(int message) {
-        if (stopped) {
-            return;
-        }
         hideDisabled();
         ProgressFragment progressFragment =
                 (ProgressFragment) getFragmentManager().findFragmentByTag(FRAGMENT_PROGRESS);
@@ -319,9 +306,6 @@ public class BreventActivity extends Activity
     }
 
     public void showAppProgress(int progress, int max, int size) {
-        if (stopped) {
-            return;
-        }
         AppsProgressFragment progressFragment =
                 (AppsProgressFragment) getFragmentManager().findFragmentByTag(FRAGMENT_PROGRESS_APPS);
         if (progressFragment == null) {
@@ -344,18 +328,16 @@ public class BreventActivity extends Activity
     }
 
     private void hideFragment(String tag) {
-        if (stopped) {
-            return;
-        }
         DialogFragment fragment = (DialogFragment) getFragmentManager().findFragmentByTag(tag);
         if (fragment != null) {
-            fragment.dismiss();
+            fragment.dismissAllowingStateLoss();
         }
     }
 
     @Override
-    protected void onStart() {
+    protected synchronized void onStart() {
         super.onStart();
+        UILog.d("onStart, update stopped to false");
         stopped = false;
         if (mReceiver != null) {
             registerReceiver(mReceiver, new IntentFilter(BreventIntent.ACTION_BREVENT),
@@ -367,7 +349,8 @@ public class BreventActivity extends Activity
     }
 
     @Override
-    protected void onStop() {
+    protected synchronized void onStop() {
+        UILog.d("onStop, update stopped to true");
         stopped = true;
         if (mReceiver != null) {
             unregisterReceiver(mReceiver);
@@ -497,7 +480,9 @@ public class BreventActivity extends Activity
             return 0;
         }
         SparseIntArray status = mProcesses.get(packageName);
-        if (BreventStatus.isStandby(status)) {
+        if (isFavorite(packageName)) {
+            return R.drawable.ic_favorite_border_black_24dp;
+        } else if (BreventStatus.isStandby(status)) {
             return R.drawable.ic_snooze_black_24dp;
         } else if (BreventStatus.isRunning(status)) {
             return R.drawable.ic_alarm_black_24dp;
@@ -584,9 +569,6 @@ public class BreventActivity extends Activity
     }
 
     private void openFeedback() {
-        if (stopped) {
-            return;
-        }
         new AppsFeedbackFragment().show(getFragmentManager(), FRAGMENT_FEEDBACK);
     }
 
@@ -752,9 +734,6 @@ public class BreventActivity extends Activity
     }
 
     public void onBreventResponse(BreventProtocol response) {
-        if (stopped) {
-            return;
-        }
         int action = response.getAction();
         switch (action) {
             case BreventProtocol.STATUS_RESPONSE:
@@ -798,8 +777,10 @@ public class BreventActivity extends Activity
         } else {
             mPriority.removeAll(breventPriority.packageNames);
         }
-        AppsFragment fragment = getFragment();
-        fragment.update(breventPriority.packageNames);
+        if (mAdapter != null) {
+            AppsFragment fragment = getFragment();
+            fragment.update(breventPriority.packageNames);
+        }
     }
 
     private void onBreventPriorityResponse(BreventPriority response) {
@@ -1032,22 +1013,14 @@ public class BreventActivity extends Activity
             try {
                 IDeviceIdleController deviceidle = IDeviceIdleController.Stub.asInterface(
                         ServiceManager.getService("deviceidle"));
-                String[] fullPowerWhitelist = deviceidle.getFullPowerWhitelist();
-                if (fullPowerWhitelist != null) {
-                    for (String s : fullPowerWhitelist) {
+                String[] fullPowerWhiteList = deviceidle.getFullPowerWhitelist();
+                if (fullPowerWhiteList != null) {
+                    for (String s : fullPowerWhiteList) {
                         packageNames.put(s, IMPORTANT_BATTERY);
                     }
                 }
             } catch (RemoteException e) {
                 // do nothing
-            }
-        }
-
-        // tile
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            String tiles = getSecureSetting(HideApiOverrideN.QS_TILES);
-            for (String packageName : parseTiles(tiles)) {
-                packageNames.put(packageName, IMPORTANT_TILE);
             }
         }
 
@@ -1072,9 +1045,6 @@ public class BreventActivity extends Activity
     }
 
     public void showFragmentAsync(AppsFragment fragment, long delayMillis) {
-        if (stopped) {
-            return;
-        }
         Message message = uiHandler.obtainMessage(UI_MESSAGE_SHOW_FRAGMENT, fragment);
         uiHandler.sendMessageDelayed(message, delayMillis);
     }
@@ -1089,11 +1059,13 @@ public class BreventActivity extends Activity
         } else {
             mBrevent.removeAll(breventPackages.packageNames);
         }
-        AppsFragment fragment = getFragment();
-        if (!breventPackages.undoable) {
-            fragment.select(breventPackages.packageNames);
-        } else {
-            fragment.update(breventPackages.packageNames);
+        if (mAdapter != null) {
+            AppsFragment fragment = getFragment();
+            if (!breventPackages.undoable) {
+                fragment.select(breventPackages.packageNames);
+            } else {
+                fragment.update(breventPackages.packageNames);
+            }
         }
     }
 
@@ -1104,19 +1076,6 @@ public class BreventActivity extends Activity
 
     public void showSnackbar(String message) {
         Snackbar.make(mCoordinator, message, Snackbar.LENGTH_LONG).show();
-    }
-
-    public int resolveColor(int resId) {
-        TypedValue tv = new TypedValue();
-        getTheme().resolveAttribute(resId, tv, true);
-        if (tv.type == TypedValue.TYPE_NULL) {
-            return Color.BLACK;
-        } else if (tv.type >= TypedValue.TYPE_FIRST_COLOR_INT &&
-                tv.type <= TypedValue.TYPE_LAST_COLOR_INT) {
-            return tv.data;
-        } else {
-            return ContextCompat.getColor(this, tv.resourceId);
-        }
     }
 
     public String getLabel(String label, String packageName) {
@@ -1149,8 +1108,6 @@ public class BreventActivity extends Activity
                 return getString(R.string.important_assistant, label);
             case IMPORTANT_WEBVIEW:
                 return getString(R.string.important_webview, label);
-            case IMPORTANT_TILE:
-                return getString(R.string.important_tile, label);
             case IMPORTANT_ACCESSIBILITY:
                 return getString(R.string.important_accessibility, label);
             case IMPORTANT_DEVICE_ADMIN:
@@ -1165,7 +1122,7 @@ public class BreventActivity extends Activity
         return label;
     }
 
-    public void runAsRoot(String path) {
+    public void runAsRoot() {
         showProgress(R.string.process_retrieving);
         BreventIntentService.startBrevent(this, BreventIntent.ACTION_BREVENT);
         mHandler.sendEmptyMessageDelayed(MESSAGE_RETRIEVE2, ROOT_TIMEOUT);
@@ -1213,21 +1170,8 @@ public class BreventActivity extends Activity
         }
     }
 
-    public static Collection<String> parseTiles(String tiles) {
-        if (TextUtils.isEmpty(tiles)) {
-            return Collections.emptyList();
-        }
-        Collection<String> packageNames = new ArrayList<>();
-        for (String tile : tiles.split(",")) {
-            // custom(com.github.shadowsocks/.ShadowsocksTileService)
-            if (tile.startsWith(CUSTOM_TILE_PREFIX) && tile.endsWith(")")) {
-                int index = tile.indexOf('/');
-                if (index > 0) {
-                    packageNames.add(tile.substring(CUSTOM_TILE_LENGTH, index));
-                }
-            }
-        }
-        return packageNames;
+    public synchronized boolean isStopped() {
+        return stopped;
     }
 
 }
